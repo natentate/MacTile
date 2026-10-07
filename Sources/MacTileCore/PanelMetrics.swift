@@ -16,6 +16,26 @@ public struct PanelMetrics: Equatable {
     public let perRow: Int
 
     public static func make(style: PanelStyle, count: Int, aspect: CGFloat) -> PanelMetrics {
+        make(style: style, count: count, aspect: aspect, thumbnailWidth: nil, perRow: nil)
+    }
+
+    /// - Parameters:
+    ///   - thumbnailWidth: overrides the style's thumbnail width.
+    ///   - perRow: overrides how many thumbnails fit on one row.
+    public static func make(
+        style: PanelStyle, count: Int, aspect: CGFloat, thumbnailWidth: CGFloat?, perRow: Int?
+    ) -> PanelMetrics {
+        let base = makeBase(style: style, count: count, aspect: aspect)
+        guard thumbnailWidth != nil || perRow != nil else { return base }
+        let ratio = min(max(aspect, 0.5), 3.5)
+        let width = thumbnailWidth ?? base.thumbnailSize.width
+        return PanelMetrics(style: style, count: count,
+                            thumbnailSize: CGSize(width: width, height: (width / ratio).rounded()),
+                            labelHeight: base.labelHeight, labelWidth: base.labelWidth,
+                            padding: base.padding, spacing: base.spacing, perRow: max(perRow ?? base.perRow, 1))
+    }
+
+    private static func makeBase(style: PanelStyle, count: Int, aspect: CGFloat) -> PanelMetrics {
         let ratio = min(max(aspect, 0.5), 3.5)
         switch style {
         case .large:

@@ -9,12 +9,19 @@ import MacTileCore
 /// 3. **Edge snapping** — halves, quarters and maximize at the screen edges.
 ///
 /// Drags are detected by watching the window under the pointer actually move, so title
-/// bars, toolbars and tab strips all work and resizes are ignored.
+/// bars, toolbars and tab strips all work and resizes are ignored. Movement is read from
+/// the window server, which reports bounds live; Accessibility positions often lag until
+/// the pointer pauses, which made fast drags go unnoticed.
 final class DragSnapController {
     private struct Pending {
         let window: AXWindow
+        /// Accessibility frame when the drag was first seen (used for restore and unsnap).
         let frame: CGRect
-        let mouseDown: CGPoint
+        /// Window server id and bounds, when the window could be matched.
+        let windowID: CGWindowID?
+        let serverBounds: CGRect?
+        /// Pointer position (Cocoa) when `frame` and `serverBounds` were captured.
+        let pointer: CGPoint
     }
 
     private struct Session {
@@ -84,11 +91,13 @@ final class DragSnapController {
     private func mouseDown() {
         reset()
         guard AccessibilityPermission.isTrusted else { return }
-        let location = NSEvent.mouseLocation
-        guard let window = AXWindow.window(at: ScreenGeometry.flip(location)),
-              windows.canManage(window),
-              let frame = window.frame else { return }
-        phase = .pending(Pending(window: window, frame: frame, mouseDown: location))
+        let point = ScreenGeometry.flip(NSEvent.mouseLocation)
+        guard let window = AXWindow.window(at: point), windows.canManage(window),
+              let frame = window.frame, let pid = window.pid else { return }
+        let server = WindowServer.window(at: point, ownedBy: pid)
+        // Sample the pointer after the (possibly slow) lookups so it pairs with the frames.
+        phase = .pending(Pending(window: window, frame: frame, windowID: server?.id,
+                                 serverBounds: server?.bounds, pointer: NSEvent.mouseLocation))
     }
 
     private func mouseDragged() {
@@ -99,20 +108,31 @@ final class DragSnapController {
             update()
         case .pending(let pending):
             let location = NSEvent.mouseLocation
-            let distance = hypot(location.x - pending.mouseDown.x, location.y - pending.mouseDown.y)
-            guard distance > 3 else { return }
-            guard let now = pending.window.frame else {
+            let distance = hypot(location.x - pending.pointer.x, location.y - pending.pointer.y)
+            guard distance > 2 else { return }
+
+            let before: CGRect
+            let now: CGRect
+            if let id = pending.windowID, let start = pending.serverBounds, let current = WindowServer.bounds(of: id) {
+                before = start
+                now = current
+            } else if let current = pending.window.frame {
+                before = pending.frame
+                now = current
+            } else {
                 phase = .idle
                 return
             }
-            if !now.size.isClose(to: pending.frame.size) {
+
+            if !now.size.isClose(to: before.size) {
                 // The window is being resized, not moved.
                 phase = .idle
                 return
             }
-            if now.origin.isClose(to: pending.frame.origin, tolerance: 1) {
-                // Pointer moved but the window didn't: a text selection, a slider, etc.
-                if distance > 40 { phase = .idle }
+            if now.origin.isClose(to: before.origin, tolerance: 1) {
+                // Pointer moved but the window didn't (yet): a text selection, a slider, or
+                // an app that is slow to start the move. Keep watching for a while.
+                if distance > 400 { phase = .idle }
                 return
             }
             begin(pending)

@@ -35,6 +35,43 @@ extension AXUIElement {
     func set(_ attribute: String, _ value: CFTypeRef) -> Bool {
         AXUIElementSetAttributeValue(self, attribute as CFString, value) == .success
     }
+
+    var position: CGPoint? {
+        guard let value = copyValue(kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() else {
+            return nil
+        }
+        var point = CGPoint.zero
+        return AXValueGetValue(value as! AXValue, .cgPoint, &point) ? point : nil
+    }
+
+    var size: CGSize? {
+        guard let value = copyValue(kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() else {
+            return nil
+        }
+        var size = CGSize.zero
+        return AXValueGetValue(value as! AXValue, .cgSize, &size) ? size : nil
+    }
+
+    /// Frame in top-left-origin global coordinates.
+    var frame: CGRect? {
+        guard let position, let size else { return nil }
+        return CGRect(origin: position, size: size)
+    }
+
+    var children: [AXUIElement] { elements(kAXChildrenAttribute) }
+    var role: String? { string(kAXRoleAttribute) }
+    var identifier: String? { string(kAXIdentifierAttribute) }
+    var title: String? { string(kAXTitleAttribute) }
+
+    @discardableResult
+    func press() -> Bool {
+        AXUIElementPerformAction(self, kAXPressAction as CFString) == .success
+    }
+
+    /// Caps how long calls to this element (and, for an app element, its children) may block.
+    func setTimeout(_ seconds: Float) {
+        AXUIElementSetMessagingTimeout(self, seconds)
+    }
 }
 
 /// A thin wrapper over an Accessibility window element. Frames are in top-left-origin
@@ -74,26 +111,7 @@ final class AXWindow {
         return isMovable
     }
 
-    var position: CGPoint? {
-        guard let value = element.copyValue(kAXPositionAttribute), CFGetTypeID(value) == AXValueGetTypeID() else {
-            return nil
-        }
-        var point = CGPoint.zero
-        return AXValueGetValue(value as! AXValue, .cgPoint, &point) ? point : nil
-    }
-
-    var size: CGSize? {
-        guard let value = element.copyValue(kAXSizeAttribute), CFGetTypeID(value) == AXValueGetTypeID() else {
-            return nil
-        }
-        var size = CGSize.zero
-        return AXValueGetValue(value as! AXValue, .cgSize, &size) ? size : nil
-    }
-
-    var frame: CGRect? {
-        guard let position, let size else { return nil }
-        return CGRect(origin: position, size: size)
-    }
+    var frame: CGRect? { element.frame }
 
     func setPosition(_ point: CGPoint) {
         var point = point
@@ -126,6 +144,20 @@ final class AXWindow {
         AXUIElementPerformAction(element, kAXRaiseAction as CFString)
     }
 
+    /// Presses the window's close button, as clicking it would (apps may ask to save).
+    @discardableResult
+    func close() -> Bool {
+        element.element(kAXCloseButtonAttribute)?.press() ?? false
+    }
+
+    func minimize() {
+        element.set(kAXMinimizedAttribute, kCFBooleanTrue)
+    }
+
+    var runningApplication: NSRunningApplication? {
+        pid.flatMap { NSRunningApplication(processIdentifier: $0) }
+    }
+
     // MARK: Lookup
 
     /// The focused window of the frontmost app.
@@ -146,6 +178,9 @@ final class AXWindow {
     /// The window under a point (top-left global coordinates).
     static func window(at point: CGPoint) -> AXWindow? {
         let systemWide = AXUIElementCreateSystemWide()
+        // Don't let one unresponsive app stall drag detection for long. (On the system-wide
+        // element this sets the default for every element, so keep it generous.)
+        systemWide.setTimeout(1.0)
         var hit: AXUIElement?
         guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &hit) == .success,
               var current = hit else { return nil }
@@ -156,6 +191,48 @@ final class AXWindow {
             current = parent
         }
         return nil
+    }
+}
+
+/// Reads window geometry straight from the window server. Unlike Accessibility, which
+/// many apps only update once the pointer pauses, these bounds are live during a drag.
+enum WindowServer {
+    struct Info {
+        let id: CGWindowID
+        let pid: pid_t
+        let bounds: CGRect
+    }
+
+    /// The frontmost normal window owned by `pid` that contains `point` (top-left coordinates).
+    static func window(at point: CGPoint, ownedBy pid: pid_t) -> Info? {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]] else { return nil }
+        for entry in list {
+            guard let info = parse(entry), info.pid == pid, layer(of: entry) == 0, info.bounds.contains(point) else {
+                continue
+            }
+            return info
+        }
+        return nil
+    }
+
+    /// Current bounds of a window (top-left coordinates).
+    static func bounds(of id: CGWindowID) -> CGRect? {
+        guard let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]],
+              let entry = list.first else { return nil }
+        return parse(entry)?.bounds
+    }
+
+    private static func layer(of entry: [String: Any]) -> Int {
+        (entry[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0
+    }
+
+    private static func parse(_ entry: [String: Any]) -> Info? {
+        guard let number = entry[kCGWindowNumber as String] as? NSNumber,
+              let owner = entry[kCGWindowOwnerPID as String] as? NSNumber,
+              let boundsDict = entry[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary) else { return nil }
+        return Info(id: CGWindowID(number.uint32Value), pid: pid_t(owner.int32Value), bounds: bounds)
     }
 }
 

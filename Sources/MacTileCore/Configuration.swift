@@ -90,6 +90,12 @@ public struct Configuration: Codable, Equatable {
     /// Bundle identifiers MacTile never touches.
     public var excludedBundleIDs: [String]
 
+    // Mission Control
+    /// Close / minimize / hide / snap controls on Mission Control thumbnails.
+    public var missionControlEnabled: Bool
+    /// The "tile this display" layout strip in Mission Control.
+    public var missionControlTiling: Bool
+
     public init(
         version: Int = Configuration.currentVersion,
         isEnabled: Bool = true,
@@ -109,7 +115,9 @@ public struct Configuration: Codable, Equatable {
         gap: Double = 0,
         quickLayoutColumns: Int = 6,
         quickLayoutRows: Int = 4,
-        excludedBundleIDs: [String] = []
+        excludedBundleIDs: [String] = [],
+        missionControlEnabled: Bool = true,
+        missionControlTiling: Bool = true
     ) {
         self.version = version
         self.isEnabled = isEnabled
@@ -130,6 +138,8 @@ public struct Configuration: Codable, Equatable {
         self.quickLayoutColumns = quickLayoutColumns
         self.quickLayoutRows = quickLayoutRows
         self.excludedBundleIDs = excludedBundleIDs
+        self.missionControlEnabled = missionControlEnabled
+        self.missionControlTiling = missionControlTiling
     }
 
     enum CodingKeys: String, CodingKey {
@@ -137,6 +147,7 @@ public struct Configuration: Codable, Equatable {
         case panelTrigger, panelModifier, panelStyle, panelPosition
         case edgeSnapping, zoneOverlayEnabled, zoneOverlayModifier, defaultLayoutID, displayLayouts
         case restoreOnUnsnap, gap, quickLayoutColumns, quickLayoutRows, excludedBundleIDs
+        case missionControlEnabled, missionControlTiling
     }
 
     public init(from decoder: Decoder) throws {
@@ -162,6 +173,10 @@ public struct Configuration: Codable, Equatable {
         quickLayoutColumns = try c.decodeIfPresent(Int.self, forKey: .quickLayoutColumns) ?? d.quickLayoutColumns
         quickLayoutRows = try c.decodeIfPresent(Int.self, forKey: .quickLayoutRows) ?? d.quickLayoutRows
         excludedBundleIDs = try c.decodeIfPresent([String].self, forKey: .excludedBundleIDs) ?? d.excludedBundleIDs
+        missionControlEnabled = try c.decodeIfPresent(Bool.self, forKey: .missionControlEnabled)
+            ?? d.missionControlEnabled
+        missionControlTiling = try c.decodeIfPresent(Bool.self, forKey: .missionControlTiling)
+            ?? d.missionControlTiling
     }
 
     // MARK: Queries

@@ -43,7 +43,8 @@ final class OverlayPanel: NSPanel {
 
 /// Shared drawing for layout thumbnails (drag panel, layout picker).
 enum ThumbnailRenderer {
-    static func draw(layout: TileLayout, in rect: CGRect, highlightedZone: UUID?, showNumbers: Bool) {
+    static func draw(layout: TileLayout, in rect: CGRect, highlightedZone: UUID?, showNumbers: Bool,
+                     highlightAll: Bool = false) {
         let background = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
         NSColor.black.withAlphaComponent(0.28).setFill()
         background.fill()
@@ -51,7 +52,7 @@ enum ThumbnailRenderer {
         for (index, zone) in layout.zones.enumerated() {
             let zoneRect = LayoutGeometry.rect(for: zone.rect, in: rect.insetBy(dx: 3, dy: 3), inset: 1.5)
             let path = NSBezierPath(roundedRect: zoneRect, xRadius: 3, yRadius: 3)
-            let isHighlighted = zone.id == highlightedZone
+            let isHighlighted = highlightAll || zone.id == highlightedZone
             (isHighlighted ? NSColor.controlAccentColor : NSColor.white.withAlphaComponent(0.2)).setFill()
             path.fill()
             NSColor.white.withAlphaComponent(isHighlighted ? 0.9 : 0.35).setStroke()

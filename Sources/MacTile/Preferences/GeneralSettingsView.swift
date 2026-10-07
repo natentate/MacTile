@@ -66,6 +66,18 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section("Mission Control") {
+                Toggle("Add window controls to Mission Control", isOn: $state.config.missionControlEnabled)
+                Toggle("Show the Tile button to arrange a display with a layout",
+                       isOn: $state.config.missionControlTiling)
+                    .disabled(!state.config.missionControlEnabled)
+                Text("Every thumbnail gets a close button. Hover one for minimize, hide and a layout picker "
+                     + "that snaps the window into any zone. With the pointer over a thumbnail: ⌘W close, "
+                     + "⌘M minimize, ⌘H hide, ⌘Q quit.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("Zone Overlay Layout per Display") {
                 Picker("Default", selection: $state.config.defaultLayoutID) {
                     Text("First layout").tag(UUID?.none)

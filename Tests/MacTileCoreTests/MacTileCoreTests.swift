@@ -274,3 +274,66 @@ final class ConfigurationTests: XCTestCase {
         XCTAssertEqual(combo.displayString, "⌃⌥⇧⌘←")
     }
 }
+
+final class MissionControlMatchingTests: XCTestCase {
+    func testTitleScores() {
+        XCTAssertEqual(ThumbnailMatcher.titleScore(thumbnail: "README.md", window: "README.md"), 4)
+        XCTAssertEqual(ThumbnailMatcher.titleScore(thumbnail: "A very long…document.pdf",
+                                                   window: "A very long title for a document.pdf"), 3)
+        XCTAssertEqual(ThumbnailMatcher.titleScore(thumbnail: "A very long ti…",
+                                                   window: "A very long title"), 3)
+        XCTAssertEqual(ThumbnailMatcher.titleScore(thumbnail: "Inbox", window: "Inbox — 3 unread"), 2)
+        XCTAssertEqual(ThumbnailMatcher.titleScore(thumbnail: "Notes", window: "", appName: "Notes"), 1)
+        XCTAssertEqual(ThumbnailMatcher.titleScore(thumbnail: "Inbox", window: "Calendar"), 0)
+        XCTAssertEqual(ThumbnailMatcher.titleScore(thumbnail: "Untitled", window: ""), 0)
+    }
+
+    func testBestMatchPrefersTitleThenShape() {
+        let candidates = [
+            ThumbnailMatcher.Candidate(title: "Terminal", appName: "Terminal", bundleID: "com.apple.Terminal", aspect: 1.6),
+            ThumbnailMatcher.Candidate(title: "Terminal", appName: "Terminal", bundleID: "com.apple.Terminal", aspect: 0.8),
+            ThumbnailMatcher.Candidate(title: "Docs", appName: "Safari", bundleID: "com.apple.Safari", aspect: 0.8),
+        ]
+        XCTAssertEqual(ThumbnailMatcher.bestMatch(thumbnailTitle: "Terminal", thumbnailAspect: 0.75,
+                                                  candidates: candidates), 1)
+        XCTAssertEqual(ThumbnailMatcher.bestMatch(thumbnailTitle: "Terminal", thumbnailAspect: 1.5,
+                                                  candidates: candidates), 0)
+        XCTAssertEqual(ThumbnailMatcher.bestMatch(thumbnailTitle: "Docs", thumbnailAspect: 1,
+                                                  candidates: candidates), 2)
+        XCTAssertNil(ThumbnailMatcher.bestMatch(thumbnailTitle: "Docs", thumbnailAspect: 1,
+                                                bundleID: "com.apple.Terminal", candidates: candidates))
+        XCTAssertNil(ThumbnailMatcher.bestMatch(thumbnailTitle: "Mail", thumbnailAspect: 1, candidates: candidates))
+    }
+
+    func testBundleIDFromIdentifier() {
+        XCTAssertEqual(MissionControlIdentifier.bundleID(from: "com.apple.Safari.space.3"), "com.apple.Safari")
+        XCTAssertEqual(MissionControlIdentifier.bundleID(from: "com.example.space.app.space.12"), "com.example.space.app")
+        XCTAssertNil(MissionControlIdentifier.bundleID(from: "mc.display"))
+        XCTAssertNil(MissionControlIdentifier.bundleID(from: nil))
+    }
+
+    func testReadingOrder() {
+        let frames = [
+            CGRect(x: 600, y: 420, width: 300, height: 200), // row 2, right
+            CGRect(x: 50, y: 100, width: 300, height: 200),  // row 1, left
+            CGRect(x: 100, y: 430, width: 300, height: 180), // row 2, left
+            CGRect(x: 500, y: 90, width: 300, height: 220),  // row 1, right
+        ]
+        XCTAssertEqual(ReadingOrder.sorted(frames), [1, 3, 2, 0])
+        XCTAssertEqual(ReadingOrder.sorted([]), [])
+    }
+
+    func testMissionControlSettingsDefaultOnAndDecodeLeniently() throws {
+        XCTAssertTrue(Configuration().missionControlEnabled)
+        let decoded = try ConfigStore.decode(Data(#"{"missionControlTiling": false}"#.utf8))
+        XCTAssertTrue(decoded.missionControlEnabled)
+        XCTAssertFalse(decoded.missionControlTiling)
+    }
+
+    func testMetricsOverrides() {
+        let metrics = PanelMetrics.make(style: .compact, count: 6, aspect: 2, thumbnailWidth: 80, perRow: 3)
+        XCTAssertEqual(metrics.thumbnailSize, CGSize(width: 80, height: 40))
+        XCTAssertEqual(metrics.rows, 2)
+        XCTAssertEqual(metrics.columns, 3)
+    }
+}

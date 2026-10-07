@@ -8,6 +8,7 @@ final class AppController {
     let windows: WindowManager
     let hotKeys = HotKeyController()
     private let drag: DragSnapController
+    private let missionControl: MissionControlController
     private let workspaces: WorkspaceLauncher
     private let quickLayout = QuickLayoutPanel()
     private let picker = LayoutPanel(interactive: true)
@@ -20,6 +21,7 @@ final class AppController {
         state = AppState()
         windows = WindowManager(state: state)
         drag = DragSnapController(state: state, windows: windows)
+        missionControl = MissionControlController(state: state, windows: windows)
         workspaces = WorkspaceLauncher(state: state, windows: windows)
     }
 
@@ -36,6 +38,7 @@ final class AppController {
 
         menu = StatusMenuController(controller: self)
         drag.start()
+        missionControl.start()
 
         picker.onCancel = { [weak self] in self?.picker.hide() }
 
@@ -47,6 +50,7 @@ final class AppController {
 
     func stop() {
         drag.stop()
+        missionControl.stop()
         state.saveNow()
     }
 

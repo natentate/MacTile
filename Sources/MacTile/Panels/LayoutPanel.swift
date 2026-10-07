@@ -45,7 +45,7 @@ final class LayoutPanel {
         view.highlighted = nil
 
         let size = metrics.panelSize
-        var origin: CGPoint
+        let origin: CGPoint
         switch position {
         case .top:
             origin = CGPoint(x: visible.midX - size.width / 2, y: visible.maxY - size.height - 10)

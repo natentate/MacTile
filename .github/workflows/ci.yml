@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+      - name: Bundle MacTile.app
+        run: scripts/build-app.sh
+
+      - name: Zip app
+        run: ditto -c -k --keepParent build/MacTile.app build/MacTile.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MacTile
+          path: build/MacTile.zip

@@ -24,6 +24,8 @@ Swift, AppKit + SwiftUI, no third-party dependencies. Requires macOS 13 Ventura 
 | **Restore** | Dragging a snapped window out of its zone gives back its original size. A shortcut restores the pre-snap frame. |
 | **Gaps** | Optional, even spacing between windows and around screen edges. |
 | **Multi-display** | Works on every display. Move windows between displays with their relative size kept. |
+| **Mission Control controls** | Every thumbnail in Mission Control and App Exposé gets a close button. Hover one for minimize, hide and a layout picker that snaps the window into any zone. With the pointer over a thumbnail: ⌘W close, ⌘M minimize, ⌘H hide, ⌘Q quit. |
+| **Tile from Mission Control** | A **Tile** button on each display arranges that display's windows into a layout, in the order their thumbnails appear. |
 | **Exclusions** | Apps MacTile should never touch. |
 | **Portable config** | Settings live in one JSON file. Export, import and reset are in Settings. |
 
@@ -105,11 +107,13 @@ Sources/
 │   ├── Geometry.swift      Unit rect → frame with gaps, edge snapping, Quick Layout grid
 │   ├── PanelMetrics.swift  Thumbnail layout for the drag panel
 │   ├── Configuration.swift All settings, lenient decoding, reference cleanup
-│   └── ConfigStore.swift   JSON persistence
+│   ├── ConfigStore.swift   JSON persistence
+│   └── MissionControlMatching.swift  Thumbnail → window matching, reading order
 └── MacTile/                The app
     ├── main.swift / AppController.swift   Lifecycle and action routing
     ├── Accessibility/AXWindow.swift       Read and set window frames via AXUIElement
     ├── Drag/DragSnapController.swift      Global mouse monitor → drag detection → drop targets
+    ├── MissionControl/                    Thumbnail scanner, controls overlay, event tap, tiling
     ├── Panels/                            Layout panel, zone overlay, snap preview, Quick Layout
     ├── HotKeys/HotKeyController.swift     Carbon RegisterEventHotKey (no extra permission)
     ├── Menu/StatusMenuController.swift    Menu bar menu
@@ -119,13 +123,27 @@ Sources/
 
 **How drag detection works.** A global `NSEvent` monitor watches left mouse down, drag
 and up. On mouse down MacTile finds the window under the pointer with
-`AXUIElementCopyElementAtPosition`. When the pointer moves, it checks whether that
-window's position changed while its size stayed the same. That pattern means the window is
-being moved, whether by its title bar, a toolbar or a tab strip, and not resized and not
-receiving a click. From then on, every mouse event re-evaluates the drop targets in
+`AXUIElementCopyElementAtPosition` and matches it to its window server entry. When the
+pointer moves, it checks whether that window's position changed while its size stayed the
+same. That pattern means the window is being moved, whether by its title bar, a toolbar or a
+tab strip, and not resized and not receiving a click. Positions come from the window server
+(`CGWindowListCopyWindowInfo`), which reports bounds live during a drag. Many apps only
+update their Accessibility position once the pointer pauses, so relying on it alone missed
+fast drags. From then on, every mouse event re-evaluates the drop targets in
 priority order: zone overlay, then layout panel, then edge snapping. A translucent
 preview shows where the window will land. On mouse up the window is moved through the
 Accessibility API.
+
+**How the Mission Control controls work.** Mission Control draws thumbnails itself, so they
+aren't real windows, but it exposes each one's title and rect through Accessibility: under the
+Dock up to macOS 26 and under WindowManager from macOS 27. MacTile reads both. It polls for
+that tree, waits until the thumbnails stop moving, then draws its buttons in click-through
+panels above Mission Control. While Mission Control is open, an event tap catches clicks and
+⌘-keys aimed at those buttons and passes everything else through. Each thumbnail is matched
+back to its real window by title, allowing for Mission Control's "…" truncation. On macOS 27
+the app's bundle ID is also used. Ties are broken by window shape. This relies on
+undocumented Accessibility structure, so a future macOS update could break it until MacTile is
+updated.
 
 All overlays are borderless, non-activating `NSPanel`s that ignore the mouse. The app you
 are dragging keeps focus and keeps receiving the drag.

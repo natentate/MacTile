@@ -38,6 +38,14 @@ struct GeneralSettingsView: View {
                 Picker("Show layout panel", selection: $state.config.panelTrigger) {
                     ForEach(PanelTrigger.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                if state.config.panelTrigger == .topEdge {
+                    HStack {
+                        Text("Hold at top for")
+                        Slider(value: $state.config.panelDwell, in: 0...1, step: 0.05)
+                        Text(String(format: "%.2f s", state.config.panelDwell))
+                            .monospacedDigit().frame(width: 52, alignment: .trailing)
+                    }
+                }
                 if state.config.panelTrigger == .modifier {
                     modifierPicker("Modifier key", selection: $state.config.panelModifier)
                 }

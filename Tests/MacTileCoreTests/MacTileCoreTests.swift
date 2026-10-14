@@ -192,7 +192,7 @@ final class ConfigurationTests: XCTestCase {
     func testMissingKeysFallBackToDefaults() throws {
         let decoded = try ConfigStore.decode(Data(#"{"gap": 8}"#.utf8))
         XCTAssertEqual(decoded.gap, 8)
-        XCTAssertEqual(decoded.panelTrigger, .always)
+        XCTAssertEqual(decoded.panelTrigger, .topEdge)
         XCTAssertFalse(decoded.layouts.isEmpty)
         XCTAssertFalse(decoded.bindings.isEmpty)
     }
@@ -335,5 +335,48 @@ final class MissionControlMatchingTests: XCTestCase {
         XCTAssertEqual(metrics.thumbnailSize, CGSize(width: 80, height: 40))
         XCTAssertEqual(metrics.rows, 2)
         XCTAssertEqual(metrics.columns, 3)
+    }
+}
+
+final class PanelTriggerTests: XCTestCase {
+    func testDwellRequiresContinuousHold() {
+        var dwell = DwellTracker(delay: 0.3)
+        XCTAssertFalse(dwell.update(inside: true, now: 10.0))
+        XCTAssertFalse(dwell.update(inside: true, now: 10.2))
+        XCTAssertEqual(dwell.remaining(now: 10.2)!, 0.1, accuracy: 0.0001)
+        XCTAssertTrue(dwell.update(inside: true, now: 10.3))
+        XCTAssertTrue(dwell.update(inside: true, now: 12))
+    }
+
+    func testLeavingResetsDwell() {
+        var dwell = DwellTracker(delay: 0.3)
+        dwell.update(inside: true, now: 1.0)
+        XCTAssertFalse(dwell.update(inside: false, now: 1.2))
+        XCTAssertNil(dwell.remaining(now: 1.2))
+        XCTAssertFalse(dwell.update(inside: true, now: 1.25))
+        XCTAssertFalse(dwell.update(inside: true, now: 1.5))
+        XCTAssertTrue(dwell.update(inside: true, now: 1.55))
+    }
+
+    func testZeroDelayIsImmediate() {
+        var dwell = DwellTracker(delay: 0)
+        XCTAssertTrue(dwell.update(inside: true, now: 5))
+    }
+
+    func testNewInstallsOpenPanelFromTopOnly() {
+        XCTAssertEqual(Configuration().panelTrigger, .topEdge)
+        XCTAssertEqual(Configuration().panelDwell, 0.35, accuracy: 0.0001)
+    }
+
+    func testVersion1AlwaysTriggerMigratesToTopEdge() throws {
+        let migrated = try ConfigStore.decode(Data(#"{"version": 1, "panelTrigger": "always"}"#.utf8))
+        XCTAssertEqual(migrated.panelTrigger, .topEdge)
+        XCTAssertEqual(migrated.version, Configuration.currentVersion)
+        // Deliberate choices survive.
+        let modifier = try ConfigStore.decode(Data(#"{"version": 1, "panelTrigger": "modifier"}"#.utf8))
+        XCTAssertEqual(modifier.panelTrigger, .modifier)
+        // A v2 file that explicitly chose "always" is left alone.
+        let chosen = try ConfigStore.decode(Data(#"{"version": 2, "panelTrigger": "always"}"#.utf8))
+        XCTAssertEqual(chosen.panelTrigger, .always)
     }
 }

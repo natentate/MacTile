@@ -10,8 +10,8 @@ Swift, AppKit + SwiftUI, no third-party dependencies. Requires macOS 13 Ventura 
 
 | Feature | How it works in MacTile |
 | --- | --- |
-| **Drag & drop layouts** | Start dragging any window and a panel of layout thumbnails appears. Drop the window on a zone of any thumbnail to resize and place it there. |
-| **Panel trigger** | Always while dragging, only while holding a modifier, only when dragged to the top of the screen, or never. |
+| **Drag & drop layouts** | Start dragging any window and push it to the top of the screen. After a brief hold (adjustable) a panel of layout thumbnails appears. Drop the window on a zone of any thumbnail to resize and place it there. |
+| **Panel trigger** | Dragged to the top of the screen and held briefly (the default), always while dragging, only while holding a modifier, or never. |
 | **Layout views** | Large thumbnails, compact thumbnails or a list; panel at the top of the screen, centred, or next to the pointer. |
 | **Basic & advanced layouts** | Grid layouts (one zone per cell) or free-form layouts with any number of zones, including overlapping and nested zones. |
 | **Layout editor** | Draw zones by dragging on a snapping grid; move, resize, split left/right or top/bottom, delete; per-layout grid resolution. |

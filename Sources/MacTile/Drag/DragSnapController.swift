@@ -49,6 +49,11 @@ final class DragSnapController {
     private var monitors: [Any] = []
     private var phase: Phase = .idle
     private var target: Target?
+    private var topDwell = DwellTracker(delay: 0.35)
+    private var dwellTimer: Timer?
+
+    /// How close to the top edge (points) the pointer must be to count as "at the top".
+    private static let topZoneHeight: CGFloat = 40
 
     init(state: AppState, windows: WindowManager) {
         self.state = state
@@ -226,15 +231,34 @@ final class DragSnapController {
         case .modifier:
             return flags.contains(config.panelModifier.flags)
         case .topEdge:
-            let nearTop = screen.frame.maxY - location.y <= 36
-            let overPanel = panel.isVisible && panel.frame.insetBy(dx: -40, dy: -60).contains(location)
-            return nearTop || overPanel
+            let nearTop = screen.frame.maxY - location.y <= DragSnapController.topZoneHeight
+            // Once open, the panel stays while the pointer is over it, so a slow move down
+            // onto a thumbnail doesn't close it.
+            if panel.isVisible, panel.frame.insetBy(dx: -40, dy: -60).contains(location) { return true }
+            topDwell.delay = max(config.panelDwell, 0)
+            let now = ProcessInfo.processInfo.systemUptime
+            let dwelled = topDwell.update(inside: nearTop, now: now)
+            if nearTop, !dwelled, let remaining = topDwell.remaining(now: now) {
+                scheduleDwellCheck(after: remaining)
+            }
+            return dwelled
+        }
+    }
+
+    /// Mouse events stop when the pointer rests, so re-evaluate once the dwell has elapsed.
+    private func scheduleDwellCheck(after delay: TimeInterval) {
+        dwellTimer?.invalidate()
+        dwellTimer = Timer.scheduledTimer(withTimeInterval: delay + 0.02, repeats: false) { [weak self] _ in
+            self?.update()
         }
     }
 
     private func reset() {
         phase = .idle
         target = nil
+        topDwell.reset()
+        dwellTimer?.invalidate()
+        dwellTimer = nil
         panel.hide()
         preview.hide()
         overlay.hide()

@@ -57,7 +57,7 @@ public enum PanelPosition: String, Codable, CaseIterable {
 /// Decoding is lenient: any missing key falls back to its default, so older or
 /// hand-edited files keep working as new settings are added.
 public struct Configuration: Codable, Equatable {
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public var version: Int
     public var isEnabled: Bool
@@ -70,6 +70,8 @@ public struct Configuration: Codable, Equatable {
     public var panelModifier: DragModifier
     public var panelStyle: PanelStyle
     public var panelPosition: PanelPosition
+    /// Seconds the pointer must stay near the top before the panel appears (top-edge trigger).
+    public var panelDwell: Double
 
     // Snapping
     public var edgeSnapping: Bool
@@ -102,10 +104,11 @@ public struct Configuration: Codable, Equatable {
         layouts: [TileLayout] = TileLayout.defaultLayouts(),
         bindings: [HotKeyBinding] = HotKeyBinding.defaults(),
         workspaces: [Workspace] = [],
-        panelTrigger: PanelTrigger = .always,
+        panelTrigger: PanelTrigger = .topEdge,
         panelModifier: DragModifier = .option,
         panelStyle: PanelStyle = .large,
         panelPosition: PanelPosition = .top,
+        panelDwell: Double = 0.35,
         edgeSnapping: Bool = true,
         zoneOverlayEnabled: Bool = true,
         zoneOverlayModifier: DragModifier = .shift,
@@ -128,6 +131,7 @@ public struct Configuration: Codable, Equatable {
         self.panelModifier = panelModifier
         self.panelStyle = panelStyle
         self.panelPosition = panelPosition
+        self.panelDwell = panelDwell
         self.edgeSnapping = edgeSnapping
         self.zoneOverlayEnabled = zoneOverlayEnabled
         self.zoneOverlayModifier = zoneOverlayModifier
@@ -144,7 +148,7 @@ public struct Configuration: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case version, isEnabled, layouts, bindings, workspaces
-        case panelTrigger, panelModifier, panelStyle, panelPosition
+        case panelTrigger, panelModifier, panelStyle, panelPosition, panelDwell
         case edgeSnapping, zoneOverlayEnabled, zoneOverlayModifier, defaultLayoutID, displayLayouts
         case restoreOnUnsnap, gap, quickLayoutColumns, quickLayoutRows, excludedBundleIDs
         case missionControlEnabled, missionControlTiling
@@ -162,6 +166,7 @@ public struct Configuration: Codable, Equatable {
         panelModifier = try c.decodeIfPresent(DragModifier.self, forKey: .panelModifier) ?? d.panelModifier
         panelStyle = try c.decodeIfPresent(PanelStyle.self, forKey: .panelStyle) ?? d.panelStyle
         panelPosition = try c.decodeIfPresent(PanelPosition.self, forKey: .panelPosition) ?? d.panelPosition
+        panelDwell = try c.decodeIfPresent(Double.self, forKey: .panelDwell) ?? d.panelDwell
         edgeSnapping = try c.decodeIfPresent(Bool.self, forKey: .edgeSnapping) ?? d.edgeSnapping
         zoneOverlayEnabled = try c.decodeIfPresent(Bool.self, forKey: .zoneOverlayEnabled) ?? d.zoneOverlayEnabled
         zoneOverlayModifier = try c.decodeIfPresent(DragModifier.self, forKey: .zoneOverlayModifier)
@@ -177,6 +182,13 @@ public struct Configuration: Codable, Equatable {
             ?? d.missionControlEnabled
         missionControlTiling = try c.decodeIfPresent(Bool.self, forKey: .missionControlTiling)
             ?? d.missionControlTiling
+
+        // v1 showed the panel on every drag. It now appears only after dragging to the top
+        // of the screen, so move saved v1 settings over (other triggers were deliberate).
+        if version < 2 {
+            if panelTrigger == .always { panelTrigger = .topEdge }
+            version = Configuration.currentVersion
+        }
     }
 
     // MARK: Queries
